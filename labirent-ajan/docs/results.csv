@@ -1,0 +1,19 @@
+event,algorithm,path_steps,expanded_unique,queue_pops,vertex_updates,start_row,start_col
+İlk plan,BFS,155,802,802,0,10,1
+İlk plan,A*,155,747,747,0,10,1
+İlk plan,Hibrit,155,838,838,0,10,1
+Ajan 3 adım ilerledi,BFS,152,802,802,0,10,4
+Ajan 3 adım ilerledi,A*,152,747,747,0,10,4
+Ajan 3 adım ilerledi,Hibrit,152,0,0,0,10,4
+Yola engel eklendi,BFS,154,801,801,0,10,4
+Yola engel eklendi,A*,154,746,746,0,10,4
+Yola engel eklendi,Hibrit,154,6,10,51,10,4
+Engel silindi,BFS,152,802,802,0,10,4
+Engel silindi,A*,152,747,747,0,10,4
+Engel silindi,Hibrit,152,5,5,25,10,4
+Geçit tamamen kapandı,BFS,-1,428,428,0,10,4
+Geçit tamamen kapandı,A*,-1,428,428,0,10,4
+Geçit tamamen kapandı,Hibrit,-1,429,429,2091,10,4
+Geçit yeniden açıldı,BFS,152,802,802,0,10,4
+Geçit yeniden açıldı,A*,152,747,747,0,10,4
+Geçit yeniden açıldı,Hibrit,152,320,320,1260,10,4
