@@ -30,5 +30,6 @@ python main.py
 İlk planda A* ve BFS aynı uzunlukta yol buldu. A* 55 daha az kare işledi. Duvar eklendiğinde hibrit, önceki planın mesafe bilgilerini kullanarak 6 kareyi onardı. Sayılar her planda işlenen benzersiz kareleri gösterir.
 
 - [Veri seti · 20 × 50 örnek labirent](labirent-ajan/data/maze.json)
+- [Proje sunumu · 5 slayt (PDF)](labirent-ajan/Labirent_Ajani_Sunum.pdf)
 - [Python kaynak kodları ve ayrıntılı kullanım](labirent-ajan/)
 - [Tüm ölçümler](labirent-ajan/docs/results.csv)
