@@ -1,129 +1,237 @@
-"""Matplotlib üzerinde masaüstü labirent arayüzü; arama mantığından bağımsızdır."""
+"""Matplotlib tabanlı labirent görünümü ve kontrolleri."""
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap
-from matplotlib.patches import FancyBboxPatch
+from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.transforms import Affine2D
 from matplotlib.widgets import Button, Slider
 
-BG, PANEL, TEXT, MUTED = '#0b1220', '#111e31', '#edf3fc', '#9aadc7'
-ACCENT = '#36d6ab'
+
+WIDTH, HEIGHT = 1360, 760
+BG, PAPER, BORDER = '#f1f0eb', '#fffefa', '#e1e3df'
+INK, MUTED = '#172637', '#526271'
+TEAL, MINT = '#0b675b', '#e0f1e9'
+BUTTON, HOVER = '#eef1f1', '#e0e7e8'
+GRID, WALL, VISITED = '#192535', '#8191a6', '#393653'
+ROUTE, START, GOAL, AGENT = '#ffce72', '#72e6b6', '#ff929f', '#75d8ff'
+COLORS = [GRID, WALL, VISITED, '#333c49', GRID, GRID, '#333c49']
+PHASES = {
+    'idle': 'Başlamaya hazır',
+    'search': 'Kareler taranıyor',
+    'path': 'Rota çiziliyor',
+    'walk': 'Ajan hedefe ilerliyor',
+    'done': 'Hedefe ulaşıldı',
+    'blocked': 'Geçit kapalı',
+}
 
 
-def build_ui(app, COLORS, ROWS, COLS):
-    app.fig = plt.figure(figsize=(15, 9), facecolor=BG)
-    app.fig.canvas.manager.set_window_title('Labirent Ajanı • Yol Bulma Laboratuvarı')
-    app.fig.text(.045, .946, 'LABİRENT / AJAN', color=ACCENT, fontsize=11, weight='bold')
-    app.fig.text(.045, .894, 'Bir yol çiz. Bir çözüm keşfet.', color=TEXT, fontsize=26, weight='bold')
-    app.fig.text(.045, .859, 'Duvarları düzenle, algoritmaları karşılaştır ve ajanın yolculuğunu izle.',
-                 color=MUTED, fontsize=11)
+def build_ui(app, rows, cols, start, goal):
+    with plt.rc_context({'toolbar': 'None'}):
+        app.fig = plt.figure(figsize=(WIDTH / 100, HEIGHT / 100), facecolor=BG)
+    fig = app.fig
+    fig.canvas.manager.set_window_title('Labirentte Yol Bulan Ajan')
+    design = Affine2D()
+    transform = design + fig.transFigure
+    axes, sizes = [], []
 
-    def card(x, y, w, h):
-        app.fig.add_artist(FancyBboxPatch((x, y), w, h,
-            boxstyle='round,pad=0.008,rounding_size=0.012',
-            transform=app.fig.transFigure, facecolor=PANEL, edgecolor='#23334b', zorder=0))
+    def label(x, y, value, size=10, color=INK, weight='normal', align='left'):
+        artist = fig.text(x, y, value, transform=transform, ha=align, va='center',
+                          fontsize=size, color=color, weight=weight)
+        sizes.append((artist.set_fontsize, size))
+        return artist
 
-    app.metrics = {}
-    for x, key, label in ((.045, 'grid', 'LABİRENT'), (.225, 'walls', 'DUVAR KARESİ'),
-                          (.405, 'path', 'EN KISA YOL'), (.585, 'visited', 'ANİMASYONDA İNCELENEN')):
-        card(x, .767, .151, .064)
-        app.fig.text(x+.009, .812, label, color=MUTED, fontsize=8)
-        app.metrics[key] = app.fig.text(x+.009, .78, '—', color=TEXT, fontsize=17, weight='bold')
-    card(.045, .344, .691, .394)
-    app.ax = app.fig.add_axes([.053, .358, .675, .366])
-    app.image = app.ax.imshow(app.pixels(), cmap=ListedColormap(COLORS), vmin=0, vmax=6,
-                              interpolation='nearest')
-    app.ax.set_xticks([x-.5 for x in range(COLS+1)], minor=True)
-    app.ax.set_yticks([x-.5 for x in range(ROWS+1)], minor=True)
-    app.ax.grid(which='minor', color='#28394f', linewidth=.45)
-    app.ax.tick_params(which='both', bottom=False, left=False, labelbottom=False, labelleft=False)
-    for spine in app.ax.spines.values():
-        spine.set_visible(False)
-    app.ax.text(1, 10, 'B', color=BG, weight='bold', fontsize=8, ha='center', va='center')
-    app.ax.text(48, 10, 'H', color=BG, weight='bold', fontsize=8, ha='center', va='center')
-    for i, (label, color) in enumerate(zip(('Başlangıç', 'Hedef', 'Ajan', 'İncelenen', 'Yol', 'Duvar'),
-                                         (COLORS[4], COLORS[5], COLORS[6], COLORS[2], COLORS[3], COLORS[1]))):
-        app.fig.text(.05+i*.112, .322, '●', color=color, fontsize=11)
-        app.fig.text(.065+i*.112, .322, label, color=MUTED, fontsize=9)
-    app.status = app.fig.text(.045, .282, '', color=ACCENT, fontsize=12, weight='bold')
-    app.info = app.fig.text(.045, .258, '', color=MUTED, fontsize=9)
-    app.fig.text(.045, .215, 'ALGORİTMA KARŞILAŞTIRMASI', color=TEXT, fontsize=10, weight='bold')
-    app.comparison_ax = app.fig.add_axes([.045, .076, .691, .122])
+    def panel(x, y, w, h):
+        fig.add_artist(FancyBboxPatch(
+            (x, y), w, h, transform=transform, zorder=0,
+            boxstyle='round,pad=0,rounding_size=13',
+            linewidth=.8, facecolor=PAPER, edgecolor=BORDER))
+
+    def rule(x, y, w):
+        fig.add_artist(Rectangle((x, y), w, 1, transform=transform,
+                                 zorder=0, linewidth=0, facecolor=BORDER))
+
+    def region(x, y, w, h):
+        ax = fig.add_axes([0, 0, .01, .01])
+        axes.append((ax, x, y, w, h))
+        return ax
+
+    label(32, 42, 'Labirentte Yol Bulan Ajan', 24, weight='bold')
+    label(33, 77, 'BFS + D* Lite ile dinamik yol planlama', 10.5, MUTED)
+
+    panel(32, 104, 994, 478)
+    app.status_dot = label(53, 130, '●', 9, TEAL)
+    app.status = label(72, 130, '', 11, weight='bold')
+    label(897, 130, f'{rows} × {cols}', 9.5, MUTED, align='right')
+    label(915, 130, '·', 10, MUTED, align='center')
+    app.metrics = {'walls': label(958, 130, '', 9.5, INK, 'bold', 'right')}
+    label(966, 130, 'duvar', 9.5, MUTED)
+
+    board_width = 952
+    app.ax = region(53, 151, board_width, board_width * rows / cols)
+    app.image = app.ax.imshow(app.pixels(), cmap=ListedColormap(COLORS),
+                              vmin=0, vmax=len(COLORS) - 1, interpolation='nearest')
+    boundaries = [((col - .5, -.5), (col - .5, rows - .5)) for col in range(cols + 1)]
+    boundaries += [((-.5, row - .5), (cols - .5, row - .5)) for row in range(rows + 1)]
+    app.ax.add_collection(LineCollection(boundaries, colors='#536278', alpha=.39,
+                                         linewidths=.44, zorder=2))
+    app.ax.set_axis_off()
+    app.route_line, = app.ax.plot([], [], color=ROUTE, linewidth=2.7,
+                                 solid_capstyle='round', solid_joinstyle='round', zorder=3)
+    sizes.append((app.route_line.set_linewidth, 2.7))
+    for (row, col), glyph, color in ((start, 'B', START), (goal, 'H', GOAL)):
+        marker, = app.ax.plot(col, row, 'o', color=color, markersize=10.2,
+                              markeredgewidth=0, zorder=4)
+        sizes.append((marker.set_markersize, 10.2))
+        character = app.ax.text(col, row, glyph, color=INK, weight='bold',
+                                ha='center', va='center', fontsize=6, zorder=5)
+        sizes.append((character.set_fontsize, 6))
+    app.agent_marker, = app.ax.plot([], [], 'o', color=AGENT, markeredgecolor=INK,
+                                    markeredgewidth=.9, markersize=7.7, zorder=6)
+    sizes.append((app.agent_marker.set_markersize, 7.7))
+
+    legend = ((53, 'B', START, 'Başlangıç'), (197, 'H', GOAL, 'Hedef'),
+              (314, '●', AGENT, 'Ajan'), (422, '■', WALL, 'Duvar'),
+              (543, '■', '#9a88bb', 'Taranan kare'), (707, '━', ROUTE, 'Rota'))
+    for x, icon, color, title in legend:
+        fig.add_artist(FancyBboxPatch((x, 544), 23, 23, transform=transform, zorder=0,
+                                     boxstyle='round,pad=0,rounding_size=4',
+                                     linewidth=0, facecolor=GRID))
+        label(x + 11.5, 555.5, icon, 8.5, color, 'bold', 'center')
+        label(x + 31, 555.5, title, 9, MUTED)
+
+    panel(32, 598, 994, 130)
+    label(53, 621, 'Son plan', 12, weight='bold')
+    app.info = label(53, 645, '', 9, MUTED)
+    label(53, 676, 'En kısa yol', 8.5, MUTED)
+    label(197, 676, 'Animasyonda taranan', 8.5, MUTED)
+    app.metrics['path'] = label(53, 704, '', 15, weight='bold')
+    app.metrics['visited'] = label(197, 704, '', 15, weight='bold')
+    fig.add_artist(Rectangle((372, 616), 1, 94, transform=transform,
+                             zorder=0, linewidth=0, facecolor=BORDER))
+    label(397, 621, 'Algoritma karşılaştırması', 12, weight='bold')
+    app.comparison_ax = region(397, 640, 608, 73)
     app.comparison_ax.axis('off')
     app.comparison = app.comparison_ax.table(
         cellText=[['BFS', '—', '—'], ['A*', '—', '—'], ['Hibrit · BFS + D* Lite', '—', '—']],
-        colLabels=['Algoritma', 'İncelenen kare', 'Yol / adım'],
-        cellLoc='left', bbox=[0, 0, 1, 1], colWidths=[.44, .28, .28])
+        colLabels=['Algoritma', 'İncelenen kare', 'Yol (adım)'],
+        colLoc='left', cellLoc='left', bbox=[0, 0, 1, 1], colWidths=[.46, .30, .24])
     app.comparison.auto_set_font_size(False)
-    app.comparison.set_fontsize(10)
     app.comparison_results = {}
     for (row, col), cell in app.comparison.get_celld().items():
-        cell.set_edgecolor('#23334b')
-        cell.set_facecolor('#1d2d44' if row == 0 else PANEL)
-        cell.get_text().set_color(MUTED if row == 0 else TEXT)
-        cell.PAD = .08
-    app.fig.text(.045, .048, 'Aynı harita ve konum • Son planın sonuçları • Hibrit, değişikliklerde önceki bilgiyi kullanır.',
-                 color=MUTED, fontsize=8)
+        cell.set_linewidth(.65)
+        cell.set_edgecolor(PAPER)
+        cell.PAD = .05
+        cell_text = cell.get_text()
+        cell_text.set_color(MUTED if row == 0 else INK)
+        cell_text.set_weight('bold' if row == 0 else 'normal')
+        sizes.append((cell_text.set_fontsize, 8 if row == 0 else 9))
 
-    card(.766, .048, .19, .891)
-    app.fig.text(.78, .904, 'KONTROL PANELİ', color=TEXT, fontsize=12, weight='bold')
-    app.fig.text(.78, .866, '01  Bir arama başlat', color=MUTED, fontsize=10)
+    panel(1048, 104, 280, 624)
+    label(1067, 130, 'Arama', 12, weight='bold')
     app.buttons = []
 
-    def button(rect, label, callback, primary=False):
-        ax = app.fig.add_axes(rect)
-        widget = Button(ax, label, color=ACCENT if primary else '#203149',
-                        hovercolor='#75e8c9' if primary else '#304866')
-        widget.label.set_color(BG if primary else TEXT)
-        widget.label.set_fontsize(10)
+    def button(rect, title, callback, shortcut=None, primary=False):
+        ax = region(*rect)
+        color, hover = (TEAL, '#084e45') if primary else (BUTTON, HOVER)
+        widget = Button(ax, title, color=color, hovercolor=hover)
+        widget.label.set_x(.06 if rect[2] > 150 else .11)
+        widget.label.set_ha('left')
+        widget.label.set_color(PAPER if primary else INK)
         widget.label.set_weight('bold')
+        sizes.append((widget.label.set_fontsize, 11 if primary else 9))
+        if shortcut:
+            key = ax.text(.94 if rect[2] > 150 else .89, .5, shortcut, ha='right',
+                          va='center', transform=ax.transAxes,
+                          color='#dcf8ef' if primary else MUTED)
+            sizes.append((key.set_fontsize, 8))
         for spine in ax.spines.values():
             spine.set_visible(False)
         widget.on_clicked(callback)
         app.buttons.append(widget)
         return widget
 
-    button([.78, .796, .161, .048], 'Hibrit başlat  [1]', lambda _: app.begin('hybrid'), True)
-    button([.78, .742, .076, .04], 'BFS  [2]', lambda _: app.begin('bfs'))
-    button([.865, .742, .076, .04], 'A*  [3]', lambda _: app.begin('astar'))
-    app.pause_button = button([.78, .688, .161, .038], 'Duraklat', app.pause)
-    app.fig.text(.78, .648, 'Arama animasyonu hızı', color=MUTED, fontsize=10)
-    app.slider = Slider(app.fig.add_axes([.785, .615, .137, .015]), '', 1, 50,
-                        valinit=12, valstep=1, color=ACCENT, track_color='#304866')
-    app.slider.valtext.set_color(TEXT)
-    app.slider.valtext.set_fontsize(9)
+    button((1067, 151, 242, 44), 'Hibrit başlat', lambda _: app.begin('hybrid'), '1', primary=True)
+    button((1067, 204, 116, 35), 'BFS', lambda _: app.begin('bfs'), '2')
+    button((1193, 204, 116, 35), 'A*', lambda _: app.begin('astar'), '3')
+
+    rule(1067, 260, 242)
+    label(1067, 284, 'Duvarları düzenle', 12, weight='bold')
+    app.wall_button = button((1067, 305, 116, 36), 'Duvar', lambda _: app.set_tool('wall'), 'D')
+    app.erase_button = button((1193, 305, 116, 36), 'Silgi', lambda _: app.set_tool('erase'), 'E')
+    label(1067, 360, 'Sol tıkla veya sürükle.', 9, MUTED)
+    label(1067, 380, 'Sağ tuşla duvar sil.', 9, MUTED)
+    button((1067, 401, 242, 34), 'Örnek labirente dön', app.reset, 'R')
+    button((1067, 443, 242, 34), 'Tüm duvarları temizle', app.clear)
+
+    rule(1067, 498, 242)
+    label(1067, 522, 'Animasyon', 12, weight='bold')
+    label(1067, 551, 'Arama hızı', 9, MUTED)
+    app.slider = Slider(region(1072, 567, 211, 15), '', 1, 50, valinit=app.speed,
+                        valstep=1, color=TEAL, track_color='#dce4e3',
+                        handle_style={'facecolor': PAPER, 'edgecolor': TEAL, 'size': 9})
+    app.slider.valtext.set_color(MUTED)
+    sizes.append((app.slider.valtext.set_fontsize, 9))
     app.slider.on_changed(lambda value: setattr(app, 'speed', int(value)))
-    app.fig.text(.78, .556, '02  Labirenti düzenle', color=MUTED, fontsize=10)
-    app.wall_button = button([.78, .498, .076, .04], 'Duvar [D]', lambda _: app.set_tool('wall'))
-    app.erase_button = button([.865, .498, .076, .04], 'Silgi [E]', lambda _: app.set_tool('erase'))
-    app.fig.text(.78, .433, 'Sol tıkla veya sürükle.\nSağ tık her zaman duvar siler.',
-                 color=MUTED, fontsize=9, linespacing=1.7)
-    button([.78, .366, .161, .038], 'Örnek labirente dön  [R]', app.reset)
-    button([.78, .315, .161, .038], 'Tüm duvarları temizle', app.clear)
-    app.fig.text(.78, .260, 'NASIL ÇALIŞIR?', color=ACCENT, fontsize=9, weight='bold')
-    app.fig.text(.78, .139, 'Hibriti başlat, sonra ajanın\nönüne yeni bir duvar çiz.\nD* Lite rotayı günceller.\n\nGeçit yoksa silgiyle yol aç.',
-                 color=MUTED, fontsize=9, linespacing=1.7)
-    app.fig.text(.78, .082, 'BOŞLUK  Duraklat / devam et', color=MUTED, fontsize=8)
+    app.pause_button = button((1067, 604, 242, 35), 'Duraklat', app.pause, 'Boşluk')
+    label(1067, 671, 'Hibrit çalışırken rotaya duvar ekle.', 9, MUTED)
+    label(1067, 690, 'Ajan, bulunduğu yerden yeni yol bulur.', 9, MUTED)
+
+    def fit_layout(_=None):
+        width, height = fig.get_size_inches() * 100
+        scale = min(width / WIDTH, height / HEIGHT)
+        x_margin = (1 - WIDTH * scale / width) / 2
+        y_margin = (1 - HEIGHT * scale / height) / 2
+        x_scale, y_scale = scale / width, scale / height
+        design.clear().scale(x_scale, -y_scale).translate(x_margin, 1 - y_margin)
+        for ax, x, y, w, h in axes:
+            ax.set_position([x_margin + x * x_scale, 1 - y_margin - (y + h) * y_scale,
+                             w * x_scale, h * y_scale])
+        for set_size, base in sizes:
+            set_size(base * scale)
+    fit_layout()
+    fig.canvas.mpl_connect('resize_event', fit_layout)
 
 
-def refresh_ui(app):
-    app.metrics['grid'].set_text('20 × 50')
+def refresh_ui(app, start, goal):
     app.metrics['walls'].set_text(str(len(app.walls)))
-    app.metrics['path'].set_text(str(len(app.result.path)-1) + ' adım' if app.result and app.result.path else '—')
-    app.metrics['visited'].set_text(str(len(app.visited)))
-    titles = {'idle': 'Hazır. İlk yolculuğunu başlat.', 'search': 'Arama adımları gösteriliyor…',
-              'path': 'En kısa yol çiziliyor…', 'walk': 'Ajan hedefe ilerliyor…',
-              'done': 'Hedefe ulaşıldı.', 'blocked': 'Geçit bulunamadı. Bir duvar silerek yol aç.'}
-    app.status.set_text('Duraklatıldı. Devam etmek için Boşluk tuşuna bas.'
-                        if not app.running and app.result else titles[app.phase])
-    app.status.set_color('#fb7b87' if app.phase == 'blocked' else ACCENT)
-    if app.result:
-        method = app.hybrid.last_method if app.mode == 'hybrid' else {'bfs': 'BFS', 'astar': 'A* · Manhattan uzaklığı'}[app.mode]
-        app.info.set_text(f'{method}  •  İncelenen kareler mor, bulunan yol sarı gösterilir.')
+    path = app.result.path if app.result else []
+    app.metrics['path'].set_text(f'{len(path) - 1} adım' if path else 'Yol yok' if app.result else '—')
+    app.metrics['visited'].set_text(str(len(app.visited)) if app.result else '—')
+    paused = not app.running and app.result
+    app.status.set_text('Duraklatıldı' if paused else PHASES[app.phase])
+    app.status_dot.set_color('#ba4654' if app.phase == 'blocked' else '#976420' if paused else TEAL)
+    method = {'bfs': 'BFS', 'astar': 'A* · Manhattan uzaklığı', 'hybrid': app.hybrid.last_method}
+    app.info.set_text(method[app.mode] if app.result else 'Bir arama başlat.')
+    app.pause_button.label.set_text('Duraklat' if app.running else 'Devam et')
+
+    if app.route:
+        rows, cols = zip(*app.route)
+        app.route_line.set_data(cols, rows)
     else:
-        app.info.set_text('Sol tık: seçili araç  •  Sağ tık: sil  •  B: başlangıç  •  H: hedef')
-    app.pause_button.label.set_text('Duraklat  [Boşluk]' if app.running else 'Devam et  [Boşluk]')
+        app.route_line.set_data([], [])
+    row, col = app.agent
+    app.agent_marker.set_data([], [])
+    if app.agent == goal:
+        app.agent_marker.set_data([col], [row])
+        app.agent_marker.set_markerfacecolor('none')
+        app.agent_marker.set_markeredgecolor(AGENT)
+    elif app.agent != start:
+        app.agent_marker.set_data([col], [row])
+        app.agent_marker.set_markerfacecolor(AGENT)
+        app.agent_marker.set_markeredgecolor(INK)
+
     for tool, widget in (('wall', app.wall_button), ('erase', app.erase_button)):
-        widget.color = '#345c60' if app.edit_tool == tool else '#203149'
-        widget.ax.set_facecolor(widget.color)
-    for row, method in enumerate(('bfs', 'astar', 'hybrid'), 1):
+        selected = app.edit_tool == tool
+        color = MINT if selected else BUTTON
+        if widget.color != color:
+            widget.color = color
+            widget.hovercolor = '#d2ebdf' if selected else HOVER
+            widget.ax.set_facecolor(color)
+            widget.label.set_color(TEAL if selected else INK)
+
+    for row, mode in enumerate(('bfs', 'astar', 'hybrid')):
         for col in range(3):
-            app.comparison[row, col].set_facecolor('#1b3a3e' if app.result and app.mode == method else PANEL)
+            app.comparison[row + 1, col].set_facecolor(
+                MINT if app.result and app.mode == mode else '#f3f5f3')
+    for col in range(3):
+        app.comparison[0, col].set_facecolor(PAPER)

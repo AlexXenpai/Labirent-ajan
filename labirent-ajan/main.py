@@ -3,13 +3,12 @@ import argparse
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from algorithms import search, HybridPlanner
+from ui import build_ui, refresh_ui
 
 ROOT = Path(__file__).resolve().parent
 ROWS, COLS = 20, 50
 START, GOAL = (10, 1), (10, 48)
-COLORS = ['#152238', '#52647d', '#344779', '#f6c766', '#36d6ab', '#fb7b87', '#70d9ff']
 
 
 def load_map():
@@ -29,15 +28,16 @@ class App:
         self.running = True
         self.speed = 12
         self.mode = 'hybrid'
-        self.message = 'Sol fare: duvar | Sağ fare: sil | Sürükleyebilirsiniz'
         self.edit_tool = 'wall'
-        from ui import build_ui
-        build_ui(self, COLORS, ROWS, COLS)
+        build_ui(self, ROWS, COLS, START, GOAL)
         self.fig.canvas.mpl_connect('button_press_event', self.edit)
         self.fig.canvas.mpl_connect('motion_notify_event', self.edit)
         self.fig.canvas.mpl_connect('key_press_event', self.key)
         self.refresh()
-        self.animation = FuncAnimation(self.fig, self.tick, interval=35, cache_frame_data=False)
+        self.timer = self.fig.canvas.new_timer(interval=35)
+        self.timer.add_callback(self.tick)
+        self.fig.canvas.mpl_connect('close_event', lambda _: self.timer.stop())
+        self.timer.start()
 
     def pixels(self):
         grid = [[0]*COLS for _ in range(ROWS)]
@@ -62,8 +62,7 @@ class App:
                 ('Yol yok' if not result.path else str(len(result.path)-1))
                 if result is not None else '—')
         self.image.set_data(self.pixels())
-        from ui import refresh_ui
-        refresh_ui(self)
+        refresh_ui(self, START, GOAL)
         self.fig.canvas.draw_idle()
 
     def begin(self, mode, replan=False):
@@ -82,16 +81,9 @@ class App:
         self.visited, self.route = set(), []
         self.index = self.walk = 0
         self.phase, self.running = 'search', was_running if replan else True
-        length = len(self.result.path)-1 if self.result.path else 'Yol yok'
-        used = self.hybrid.last_method if mode == 'hybrid' else mode
-        name = 'BFS + D* LITE' if mode == 'hybrid' else {'bfs': 'BFS', 'astar': 'A*'}[mode]
-        status = f'{length} adım' if self.result.path else 'YOL YOK — duvar silerek geçit açabilirsiniz'
-        self.message = (f'{name}  |  {used}  |  {status}\n'
-                        'Tablo: aynı harita ve konumdan son plan; incelenen kare = kuyruktan alınıp işlenen farklı kare.\n'
-                        'BFS ve A* sıfırdan arar; hibrit, değişikliklerde önceki bilgiyi kullanır.  |  1: Hibrit, 2: BFS, 3: A*')
         self.refresh()
 
-    def tick(self, _):
+    def tick(self, _=None):
         if not self.running or not self.result:
             return
         if self.phase == 'search':
@@ -116,13 +108,15 @@ class App:
     def edit(self, event):
         if event.inaxes != self.ax or event.xdata is None or event.ydata is None:
             return
-        if event.button not in (1, 3):
+        held_buttons = getattr(event, 'buttons', ()) or ()
+        button = 3 if 3 in held_buttons else 1 if 1 in held_buttons else event.button
+        if button not in (1, 3):
             return
         cell = (int(event.ydata+.5), int(event.xdata+.5))
         if not (0 <= cell[0] < ROWS and 0 <= cell[1] < COLS) or cell in (START, GOAL, self.agent):
             return
         before = cell in self.walls
-        if event.button == 1 and self.edit_tool == 'wall':
+        if button == 1 and self.edit_tool == 'wall':
             self.walls.add(cell)
         else:
             self.walls.discard(cell)
@@ -133,7 +127,6 @@ class App:
         else:
             self.result, self.phase = None, 'idle'
             self.visited, self.route = set(), []
-            self.message = 'Harita değişti. Bir algoritma başlatın.'
             self.refresh()
 
     def set_tool(self, tool):
@@ -149,7 +142,6 @@ class App:
         self.result, self.phase = None, 'idle'
         self.visited, self.route = set(), []
         self.hybrid.reset()
-        self.message = 'Örnek labirent yüklendi. Bir algoritma seçin.'
         self.refresh()
 
     def clear(self, _):
@@ -161,7 +153,6 @@ class App:
         else:
             self.result, self.phase = None, 'idle'
             self.visited, self.route = set(), []
-            self.message = 'Tüm duvarlar silindi. Bir algoritma seçin.'
             self.refresh()
 
     def key(self, event):
@@ -182,7 +173,7 @@ if __name__ == '__main__':
     app = App()
     if args.screenshot:
         app.begin('hybrid')
-        app.animation.event_source.stop()
+        app.timer.stop()
         app.phase = 'done'
         app.agent = GOAL
         app.visited = set(app.result.expanded)

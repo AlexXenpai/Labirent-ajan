@@ -1,4 +1,5 @@
 """Grafik ekranı gerektirmeden gerçek Matplotlib fare olaylarını test eder."""
+import inspect
 import unittest
 import matplotlib
 matplotlib.use('Agg')
@@ -11,7 +12,7 @@ class InterfaceTests(unittest.TestCase):
     def setUp(self):
         self.app = App()
         self.app.fig.canvas.draw()
-        self.app.animation.event_source.stop()
+        self.app.timer.stop()
         # Testte yalnızca çizimi atla; olaylar ve uygulama mantığı gerçek.
         self.app.refresh = lambda: None
 
@@ -20,7 +21,10 @@ class InterfaceTests(unittest.TestCase):
 
     def mouse(self, cell, button, name='button_press_event'):
         x, y = self.app.ax.transData.transform((cell[1], cell[0]))
-        event = MouseEvent(name, self.app.fig.canvas, x, y, button=button)
+        if name == 'motion_notify_event' and 'buttons' in inspect.signature(MouseEvent).parameters:
+            event = MouseEvent(name, self.app.fig.canvas, x, y, buttons={button} if button else set())
+        else:
+            event = MouseEvent(name, self.app.fig.canvas, x, y, button=button)
         self.app.fig.canvas.callbacks.process(name, event)
 
     def test_mouse_add_drag_erase_and_protected_cells(self):
@@ -32,6 +36,10 @@ class InterfaceTests(unittest.TestCase):
         self.assertTrue({(1,1),(1,2)} <= self.app.walls)
         self.mouse((1,1), 3)
         self.assertNotIn((1,1), self.app.walls)
+        self.mouse((1,2), 3, 'motion_notify_event')
+        self.assertNotIn((1,2), self.app.walls)
+        self.mouse((1,3), None, 'motion_notify_event')
+        self.assertNotIn((1,3), self.app.walls)
 
     def test_dynamic_change_while_agent_is_moving(self):
         app = self.app

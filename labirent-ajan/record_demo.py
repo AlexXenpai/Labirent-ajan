@@ -9,7 +9,7 @@ from main import App, ROOT
 
 def record():
     app = App()
-    app.animation.event_source.stop()
+    app.timer.stop()
     app.fig.set_dpi(70)
     app.fig.canvas.draw()
     frames = []
@@ -26,8 +26,10 @@ def record():
     while app.phase != 'walk':
         for _ in range(6):
             app.tick(None)
+            if app.phase == 'walk':
+                break
         capture()
-    for _ in range(3):
+    for _ in range(4):
         app.tick(None)
     obstacle = app.result.path[app.walk+3]
     x, y = app.ax.transData.transform((obstacle[1], obstacle[0]))

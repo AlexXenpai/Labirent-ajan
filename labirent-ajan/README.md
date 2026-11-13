@@ -39,7 +39,7 @@ Uygulamanın interaktif kullanımı grafik masaüstü gerektirir. Ubuntu/Debian'
 
 ## Kullanım
 
-Arayüzde sağdaki kontrol panelinden arama başlatabilir, duvar veya silgi aracını seçebilirsiniz. Üstteki kartlar duvar sayısını, en kısa yol uzunluğunu ve animasyonda o ana kadar gösterilen farklı kare sayısını izler. Alt tablo tamamlanmış aramanın toplam sonuçlarını gösterir; seçili algoritmanın satırı vurgulanır. Durum satırı arama, yol çizimi, ajan hareketi, duraklatma ve geçit bulunamaması aşamalarını belirtir.
+Sağdaki panelden algoritmayı, düzenleme aracını ve animasyon hızını seçebilirsiniz. Labirentin üstünde animasyonun aşaması ve duvar sayısı görünür. Alttaki **Son plan** bölümü, en kısa yolun uzunluğunu ve animasyonda o ana kadar taranan kare sayısını gösterir. Yanındaki tabloda son planın toplam sonuçları görünür. Çalıştırılan algoritmanın satırı vurgulanır.
 
 | Kontrol | İşlev |
 |---|---|
@@ -54,7 +54,7 @@ Arayüzde sağdaki kontrol panelinden arama başlatabilir, duvar veya silgi arac
 | **Örnek labirente dön** / **R** | Geçitli 9 engel sütununu ve ajanı geri yükle |
 | **Tüm duvarları temizle** | Bütün engelleri kaldır |
 
-**Renkler:** koyu = duvar, mor = işlenen kare, sarı = yol, yeşil = başlangıç, kırmızı = hedef, mavi = hareket eden ajan. Ajan başlangıçtayken başlangıç yeşil kalır.
+**B** başlangıcı, **H** hedefi ve mavi nokta ajanı gösterir. Gri hücreler duvar, mor hücreler taranan alan, sarı çizgi bulunan rotadır.
 
 Başlangıç, hedef veya ajanın bulunduğu kare kapatılamaz. Yeni algoritma seçmek ajanı başlangıca döndürür. Hibritte duvar düzenlemek ise ajanı bulunduğu yerde tutar ve eski animasyonu yeni planla değiştirir. Duraklatma durumu korunur. BFS/A* tekil modlarında düzenleme eski sonucu temizler; yeniden başlatmak gerekir. Fareyle çizilen duvarlar oturum içindir; veri dosyası değişmez.
 
@@ -64,9 +64,9 @@ Başlangıç, hedef veya ajanın bulunduğu kare kapatılamaz. Yeni algoritma se
 
 1. **Hibrit başlat** düğmesine basın.
 2. Arama ve sarı yolun çizilmesini izleyin.
-3. Mavi ajan ilerlerken önündeki sarı karelerden birine sol tıklayın.
-4. Ajanın konumu korunur; durum satırında **D* Lite (artımlı onarım)** görünür ve yeni rota çizilir.
-5. Geçidi tamamen kapatırsanız **YOL YOK** mesajı gelir. Sağ tıklayıp geçit açınca otomatik olarak yeniden planlanır.
+3. Mavi ajan ilerlerken önündeki sarı çizgi üzerinde bir kareye sol tıklayın.
+4. **Son plan** bölümünde **D* Lite (artımlı onarım)** görünür. Yeni rota ajanın bulunduğu kareden başlar.
+5. Geçidi tamamen kapatırsanız **Geçit kapalı** mesajı gelir. Sağ tıklayıp geçit açınca rota otomatik olarak yeniden hesaplanır.
 
 ![Hareket sırasında yeni engelden kaçınma](docs/dynamic.png)
 
@@ -87,7 +87,7 @@ Başlangıç, hedef veya ajanın bulunduğu kare kapatılamaz. Yeni algoritma se
 | Kodlar ve README | Python dosyaları, kurulum/kullanım, sonuçlar, kaynaklar |
 | Ekran görüntüleri | `docs/screenshot.png`, `docs/dynamic.png` ve demo GIF |
 | Veri seti bağlantısı | [data/maze.json](data/maze.json), yeniden üretim betiği |
-| Ayrı GitHub reposu | Bu klasör bağımsız repo olarak yüklenmek üzere hazırlanmıştır; yükleme adımları aşağıda |
+| Ayrı GitHub reposu | Proje için ayrılmış deponun ana sayfasında kurulum, sonuçlar ve veri bağlantısı bulunur |
 
 ## Algoritmalar ve gerçek hibrit yapı
 
@@ -143,7 +143,6 @@ Duvarın iki yönündeki kenarların maliyeti sonsuz kabul edilir. Duvar silme m
 - **İlk hibrit planın maliyeti gizlenmez:** BFS mesafe alanını tam hesapladığı için 838 kare işler; tekil BFS hedefte durduğu için 802 kare işler.
 - **0 kare, 0 hesaplama süresi demek değildir:** mevcut alan kullanılabilir durumdadır; buna rağmen harita farkı denetlenir ve yol çıkarılır. Bu ölçüm çalışma süresi karşılaştırması değildir.
 - CSV'de D* Lite'ın **kuyruk çıkarma sayısı** (`queue_pops`) ve **UpdateVertex çağrıları** (`vertex_updates`) da ayrıca bulunur. Komşu incelemeleri benzersiz-kare sayacına dahil değildir.
-- Arayüzdeki hibrit toplamı, ilk BFS alanını ve her yeniden planlamanın kare sayısını toplar; farklı planlarda tekrar işlenen kareler tekrar sayılır. Karşılaştırma amacıyla ayrıca çalıştırılan BFS/A* bu toplama dahil değildir.
 - Arama hızlıca hesaplanır, ardından işlem sırası animasyonla oynatılır. Hız kaydırıcısı algoritmayı değil gösterimi etkiler.
 
 İlk haritada A* ile BFS aynı 155 adımlık yolu bulur; A* 55 daha az kare işler. Yerel değişiklik örneğinde hibrit eski bilgiden yararlanır. Geçit tamamen kapanınca hibritin 429, BFS'nin 428 kare işlemesi, hibritin her durumda üstün olmadığını gösterir.
@@ -173,7 +172,7 @@ python record_demo.py
 
 Ekransız sunucuda `MPLBACKEND=Agg python -m unittest -v` ve `MPLBACKEND=Agg python main.py --screenshot` kullanılabilir. Benchmark ve demo betikleri Agg backend'ini kendileri seçer.
 
-**Doğrulama ortamı:** Python 3.12.14, Matplotlib 3.10.8. **11 test başarılı.**
+**13 test** Python 3.14 ve Matplotlib 3.11.2 ile doğrulandı.
 
 - 60 sabit tohumlu rastgele 20×50 haritada BFS/A* yol uzunluğu ve adım geçerliliği.
 - 40 haritada 36'şar planlama: **1.440 durumda** hibritin BFS referansıyla aynı yol uzunluğunu vermesi; ajan hareketi, tekli/çoklu duvar ekleme ve silme.
@@ -183,7 +182,7 @@ Ekransız sunucuda `MPLBACKEND=Agg python -m unittest -v` ve `MPLBACKEND=Agg pyt
 - Ajan hareket ederken yeni duvar ekleme, konumun korunması, yeni engelden kaçınma ve hedefe ulaşma.
 - Yol yokken bekleme, geçit açınca toparlanma ve düzenleme sırasında duraklatmanın korunması.
 
-Olay testleri ekransız Matplotlib canvas'ında çalışır; farklı işletim sistemlerindeki fiziksel fare/Tk entegrasyonu burada doğrulanmamıştır. GitHub Actions dosyası Python 3.10 ve 3.12 için hazırlanmıştır; bulutta çalıştığı ancak repo yüklendikten sonra görülebilir.
+Olay testleri ekransız Matplotlib canvas'ında çalışır.
 
 ## Dosya yapısı
 
@@ -200,22 +199,4 @@ Olay testleri ekransız Matplotlib canvas'ında çalışır; farklı işletim si
 | `requirements.txt` | Python bağımlılığı |
 | `data/maze.json` | Kullanılan veri seti |
 | `docs/` | Sonuçlar, grafik, ekran görüntüleri ve demo |
-| `.github/workflows/tests.yml` | GitHub Actions test akışı |
 | `SUNUM_NOTLARI.md` | Kısa demo akışı ve teknik açıklama |
-
-## Ayrı GitHub reposuna teslim
-
-Bu klasör yalnızca Proje 3 içindir; başka projeleri aynı repoya koymayın. Repo oluşturulup yüklenmeden GitHub teslim koşulu tamamlanmış sayılmaz.
-
-GitHub'da `labirent-ajan` adında boş bir repo oluşturun; ilk aşamada README eklemeyin. Bu klasörde aşağıdaki komutları çalıştırın ve `KULLANICI_ADINIZ` kısmını gerçek hesabınızla değiştirin:
-
-```bash
-git init
-git add .
-git commit -m "Proje 3: BFS ve D* Lite hibrit labirent ajanı"
-git branch -M main
-git remote add origin https://github.com/KULLANICI_ADINIZ/labirent-ajan.git
-git push -u origin main
-```
-
-Git kurulu değilse GitHub'ın **Add file → Upload files** özelliğiyle klasörün içindeki dosyaları yükleyebilirsiniz; ZIP'in kendisini yüklemek yerine içeriğini yükleyin. Gizli `.github` klasörünü de ekleyin. Son olarak README resimlerinin ve veri bağlantısının açıldığını, Actions testlerinin başarılı olduğunu kontrol edip repo bağlantısını teslim edin.
