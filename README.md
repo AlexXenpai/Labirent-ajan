@@ -8,13 +8,15 @@
 
 ## Çalıştırma
 
-Python 3.10 veya üzeri gerekir. Reponun kökünde şu komutları çalıştırın.
+Python 3.10 veya üzeri gerekir. İlk kurulumda reponun kökünde bağımlılıkları yükleyin.
 
 ```bash
-cd labirent-ajan
-python -m pip install -r requirements.txt
-python main.py
+python -m pip install -r labirent-ajan/requirements.txt
 ```
+
+**Windows’ta** repo klasöründeki [Labirent-Baslat.cmd](Labirent-Baslat.cmd) dosyasına çift tıklayın. GitHub’dan ZIP indirdiyseniz önce arşivi bir klasöre çıkarın.
+
+Terminalden açmak için reponun kökünde `python labirent-ajan/main.py` komutunu çalıştırın.
 
 **Hibrit başlat** düğmesine basın. Mavi ajan ilerlerken sarı rotanın önüne sol fareyle duvar ekleyin. Yeni rota çizildiğinde **Son plan** bölümünde **D* Lite (artımlı onarım)** görünür. Sağ fareyle duvar silebilirsiniz.
 
